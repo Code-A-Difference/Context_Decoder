@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Context Decoder</title>
+    <style>
+        :root {
+            --primary: #2b6cb0;
+            --bg-main: #f7fafc;
+            --bg-card: #ffffff;
+            --text-dark: #2d3748;
+            --text-muted: #718096;
+            --border-color: #e2e8f0;
+            --accent-literal: #fffaf0;
+            --accent-context: #f0fff4;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-dark);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 750px;
+            width: 100%;
+            background: var(--bg-card);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        h1 { color: var(--primary); margin-top: 0; border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 8px; font-size: 1rem; }
+        button { background-color: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .result-card { border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; display: none; margin-top: 20px; }
+        .result-header { background: #edf2f7; padding: 12px 16px; font-weight: bold; display: flex; justify-content: space-between; }
+        .usage-tag { font-size: 0.8rem; text-transform: uppercase; background: var(--primary); color: white; padding: 2px 8px; border-radius: 4px; }
+        .meaning-section { padding: 16px; border-bottom: 1px solid var(--border-color); }
+        .meaning-section:last-child { border-bottom: none; }
+        .meaning-section.literal { background-color: var(--accent-literal); border-left: 4px solid #dd6b20; }
+        .meaning-section.contextual { background-color: var(--accent-context); border-left: 4px solid #38a169; }
+        .section-title { font-weight: bold; font-size: 0.9rem; margin-bottom: 4px; text-transform: uppercase; }
+        .example-box { font-style: italic; color: var(--text-muted); margin-top: 6px; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Instant Context Decoder</h1>
+    <p style="color: var(--text-muted);">An assistive tool to translate figures of speech, idioms, and confusing social commentary instantly.</p>
+
+    <div class="input-group">
+        <input type="text" id="phraseInput" placeholder="Type a phrase (e.g., a drop in the bucket, aced it, bite the bullet)...">
+        <button onclick="decodePhrase()">Decode</button>
+    </div>
+
+    <div class="result-card" id="resultCard">
+        <div class="result-header">
+            <span id="resPhrase">"Phrase"</span>
+            <span class="usage-tag" id="resUsage">Direct Context</span>
+        </div>
+        <div class="meaning-section literal">
+            <div class="section-title">Literal Meaning (What the words mean exactly)</div>
+            <div id="resLiteral">...</div>
+        </div>
+        <div class="meaning-section contextual">
+            <div class="section-title">Contextual Meaning (What the speaker actually means)</div>
+            <div id="resContextual">...</div>
+            <div id="resExample" class="example-box"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const idiomDatabase = [
+        // --- NEW EXTENDED USER PROVIDED ENTRIES WITH EXAMPLES ---
+        { idiom: "a dime a dozen", meaning: "Something that is cheap and/ or easy to get.", usage: "as part of a sentence", example: "There is a dime a dozen places to get coffee around here." },
+        { idiom: "a drop in the bucket", meaning: "A small, insignificant amount compared to what is needed or available.", usage: "as part of a sentence", example: "The amount of money we raised for the charity was a drop in the bucket compared to what they needed." },
+        { idiom: "a penny for your thoughts", meaning: "A way of asking someone what they are thinking.", usage: "by itself", example: "A penny for your thoughts? You seem lost in thought." },
+        { idiom: "all bark and no bite", meaning: "Someone who talks a big game but can’t back it up.", usage: "as part of a sentence", example: "I’m not worried about him; he’s all bark and no bite." },
+        { idiom: "all ears", meaning: "Ready and willing to listen.", usage: "as part of a sentence", example: "I’m all ears; tell me your great news!" },
+        { idiom: "asking for trouble", meaning: "Doing something that is likely to cause problems.", usage: "as part of a sentence", example: "By coming home late every night, you’re asking for trouble." },
+        { idiom: "a hard time", meaning: "Someone going through a tough time or being harassed.", usage: "as part of a sentence", example: "I’ve been having a hard time at work lately with my boss constantly criticizing me." },
+        { idiom: "all that", meaning: "Special, better than the rest. Usually used with a negative connotation or feeling.", usage: "as part of a sentence", example: "He thinks he’s all that just because he has a new car." },
+        { idiom: "aced it", meaning: "Did very well on a test, exam, or challenge of some kind.", usage: "as part of a sentence", example: "I studied all night and aced my math test. / How did the English exam go? - I aced it!" },
+        { idiom: "a lot on your plate", meaning: "Having a lot of responsibilities or problems.", usage: "as part of a sentence", example: "I’d love to help you with your project, but I already have a lot on my plate." },
+        { idiom: "a lot on his plate", meaning: "Having a lot of responsibilities or problems.", usage: "as part of a sentence", example: "He has a lot on his plate right now." },
+        { idiom: "a lot on her plate", meaning: "Having a lot of responsibilities or problems.", usage: "as part of a sentence", example: "She has a lot on her plate right now." },
+        { idiom: "actions speak louder than words", meaning: "What someone does is more important than what they say.", usage: "by itself", example: "I know that you said you would take out the garbage and clean your room, but actions speak louder than words." },
+        { idiom: "add fuel to the fire", meaning: "To make a situation worse instead of better.", usage: "as part of a sentence", example: "The last thing we need to do is add fuel to the fire by arguing about this." },
+        { idiom: "against all odds", meaning: "When the chances of success are very low.", usage: "as part of a sentence", example: "He beat cancer against all odds." },
+        { idiom: "air your dirty laundry in public", meaning: "To discuss personal problems in public.", usage: "as part of a sentence", example: "I don’t like to air my dirty laundry in public, so I won’t tell you about my fight with my brother." },
+        { idiom: "all in a day's work", meaning: "Something that is not unusual or out of the ordinary.", usage: "by itself", example: "It’s all in a day’s work for a doctor to see blood." },
+        { idiom: "all of a sudden", meaning: "Quickly and unexpectedly.", usage: "as part of a sentence", example: "All of a sudden, the power went out." },
+        { idiom: "add insult to injury", meaning: "To make a bad situation even worse.", usage: "as part of a sentence", example: "I spilled coffee all over my new shirt, and to add insult to injury, I got fired from my job today." },
+        { idiom: "all over that", meaning: "To be very interested in doing something. To be eager to do something.", usage: "as part of a sentence", example: "I’ve been wanting to learn how to play the guitar for years now. I’m all over that!" },
+        { idiom: "all systems go", meaning: "Everything is ready to go, and everything is working properly.", usage: "by itself", example: "We’re all set for the presentation; all systems go." },
+        { idiom: "a piece of cake", meaning: "Something that is easy to do.", usage: "by itself", example: "The test was a piece of cake – I knew all the answers!" },
+        { idiom: "beat around the bush", meaning: "To avoid discussing something directly.", usage: "as part of a sentence", example: "Let’s not beat around the bush – just tell me what you want!" },
+        { idiom: "bigger fish to fry", meaning: "To have more important things to do than what you are currently doing.", usage: "as part of a sentence", example: "I know you’re upset about what happened at the party, but we have bigger fish to fry – like studying for our exams." },
+        { idiom: "below the belt", meaning: "Doing or saying something that is unfair or not appropriate.", usage: "as part of a sentence", example: "It was below the belt for him to bring up her weight gain in front of everyone." },
+        { idiom: "ball is in your court", meaning: "Telling someone that they have to make a choice or decision and that it is time for them to do so.", usage: "by itself", example: "I’ve told you what I want; the ball is in your court now." },
+        { idiom: "the ball is in your court", meaning: "Telling someone that they have to make a choice or decision and that it is time for them to do so.", usage: "by itself", example: "The ball is in your court now." },
+        { idiom: "barking up the wrong tree", meaning: "Looking in the wrong place or asking the wrong person.", usage: "as part of a sentence", example: "You’re barking up the wrong tree if you think I know where your lost keys are." },
+        { idiom: "bite off more than you can chew", meaning: "To take on more responsibility than you can handle.", usage: "as part of a sentence", example: "I bit off more than I could chew when I agreed to work two jobs." },
+        { idiom: "boatload", meaning: "A large amount.", usage: "as part of a sentence", example: "I have a boatload of homework to do tonight." },
+        { idiom: "blow up", meaning: "To get angry and lose control.", usage: "as part of a sentence", example: "He blew up at me when I accidentally spilled coffee on his laptop." },
+        { idiom: "go off", meaning: "To get angry and lose control.", usage: "as part of a sentence", example: "He went off at me without any warning." },
+        { idiom: "bread and butter", meaning: "The basic things that you need in order to live or survive.", usage: "as part of a sentence", example: "Education is the bread and butter of our society." },
+        { idiom: "by hook or by crook", meaning: "Using any means necessary, even if they are dishonest.", usage: "as part of a sentence", example: "I’ll get that car one way or another – by hook or by crook." },
+        { idiom: "brings me down", meaning: "Makes me sad or depressed.", usage: "as part of a sentence", example: "Thinking about my failed relationship always brings me down." },
+        { idiom: "bring it on", meaning: "Challenging someone to do something.", usage: "by itself", example: "He said he could beat me in a race, so I said, “Bring it on!”" },
+        { idiom: "bite the bullet", meaning: "To do something difficult or unpleasant.", usage: "as part of a sentence", example: "I don’t want to go to the dentist, but I have to bite the bullet and go." },
+        { idiom: "break a leg", meaning: "A way of saying “good luck” before a performance.", usage: "by itself", example: "Break a leg! I know you’ll do great." },
+        { idiom: "blessing in disguise", meaning: "When a bad situation turns out to be good because it prevented something worse from happening.", usage: "as part of a sentence", example: "Losing my job was a blessing in disguise because I was able to find a better one." },
+        { idiom: "a blessing in disguise", meaning: "When a bad situation turns out to be good because it prevented something worse from happening.", usage: "as part of a sentence", example: "Losing my job was a blessing in disguise because I was able to find a better one." },
+        { idiom: "burn the midnight oil", meaning: "To work late into the night.", usage: "as part of a sentence", example: "I have to burn the midnight oil if I want to finish this project on time." },
+        { idiom: "brush off", meaning: "To ignore someone or something.", usage: "as part of a sentence", example: "He brushed me off when I asked him for help." },
+        { idiom: "brush up", meaning: "To review or practice something.", usage: "as part of a sentence", example: "I need to brush up on my Spanish before my trip to Mexico." },
+        { idiom: "bring home the bacon", meaning: "To earn the money that a family needs to live.", usage: "as part of a sentence", example: "My husband brings home the bacon while I stay at home with our children." },
+        { idiom: "breaking my back", meaning: "Doing a lot of hard work.", usage: "as part of a sentence", example: "I’ve been breaking my back all week – I can’t wait for the weekend!" },
+        { idiom: "busting my butt", meaning: "Doing a lot of hard work.", usage: "as part of a sentence", example: "I've been busting my butt on this task." },
+        { idiom: "breaking the bank", meaning: "costing a lot of money.", usage: "as part of a sentence", example: "This new car is breaking my bank – I can’t afford it!" },
+        { idiom: "buckle down", meaning: "To start working hard.", usage: "as part of a sentence", example: "I need to buckle down and finish this project." },
+        { idiom: "butter someone up", meaning: "To praise someone excessively in order to get something from them.", usage: "as part of a sentence", example: "I buttered him up before asking for a raise." },
+        { idiom: "butt out", meaning: "To stay out of something that doesn’t concern you.", usage: "by itself", example: "This is between him and me, so butt out!" },
+        { idiom: "by the skin of your teeth", meaning: "barely; just barely.", usage: "as part of a sentence", example: "I finished the race by the skin of my teeth – I was the last one to cross the finish line." },
+        { idiom: "can't stomach", meaning: "Dislike something so much that you can’t eat or stand it.", usage: "as part of a sentence", example: "I can’t stomach the thought of eating liver – it’s so gross!" },
+        { idiom: "call the shots", meaning: "To be in charge.", usage: "as part of a sentence", example: "As the boss, he calls the shots and we have to do what he says." },
+        { idiom: "cool down", meaning: "To calm yourself or someone else.", usage: "as part of a sentence", example: "He was so angry, I had to try to cool him down before he did something he would regret." },
+        { idiom: "cross that bridge when you come to it", meaning: "To deal with a problem when it becomes a problem, not before.", usage: "by itself", example: "I’m not sure what I’ll do when I retire, but I’ll cross that bridge when I come to it." },
+        { idiom: "cost an arm and a leg", meaning: "A very high price, usually used when something is too expensive.", usage: "as part of a sentence", example: "This new car is going to cost me an arm and a leg!" },
+        { idiom: "couch potato", meaning: "A lazy person who watches too much TV.", usage: "as part of a sentence", example: "He’s such a couch potato – all he ever does is watch TV and eat junk food." },
+        { idiom: "cut corners", meaning: "To do something in a lower quality or less expensive way in order to save time or money.", usage: "as part of a sentence", example: "The company has been cutting corners lately, and the products have been suffering." },
+        { idiom: "count your blessings", meaning: "Be grateful for what you have.", usage: "by itself", example: "I know I don’t have a lot of money, but I should count my blessings because I have a great family." },
+        { idiom: "caught red-handed", meaning: "To be caught doing something bad or illegal.", usage: "as part of a sentence", example: "The police caught the thieves red-handed – they were in the act of stealing a car." },
+        { idiom: "call it a day", meaning: "To stop working on something or to end something.", usage: "as part of a sentence", example: "I’ve been working all day and I’m exhausted. I think I’ll call it a day." },
+        { idiom: "catch my drift", meaning: "To understand what someone is saying.", usage: "as part of a sentence", example: "I’m not sure if he caught my drift, but I think he understood what I was trying to say." },
+        { idiom: "chill", meaning: "Calm down or relax. Become less stressed about something.", usage: "by itself", example: "I need to chill out – I’ve been stressing about this test too much." },
+        { idiom: "chill out", meaning: "Calm down or relax. Become less stressed about something.", usage: "by itself", example: "I need to chill out – I’ve been stressing about this test too much." },
+        { idiom: "cry over spilled milk", meaning: "To worry about something that has already happened and that cannot be changed.", usage: "by itself", example: "There’s no use crying over spilled milk – it’s already happened, so you might as well forget about it." },
+        { idiom: "crystal clear", meaning: "very easy to understand.", usage: "as part of a sentence", example: "I want to make myself crystal clear – I don’t want to go to the party." },
+        { idiom: "customer is always right", meaning: "The customer is the one who pays for a product or service, so the customer should always have what he or she wants.", usage: "by itself", example: "We always try to give the customer what he or she wants because the customer is always right." },
+        { idiom: "cut the mustard", meaning: "To be good enough; to meet the required standards.", usage: "as part of a sentence", example: "I’m sorry, but your resume just doesn’t cut the mustard – we’re looking for someone with more experience." },
+        { idiom: "cut to the chase", meaning: "To get to the point; to stop talking about something and get to the main point.", usage: "as part of a sentence", example: "Can we please cut to the chase? I don’t have all day." },
+        { idiom: "chew the fat", meaning: "To talk about something for a long time, usually something that is not important.", usage: "as part of a sentence", example: "We were just chewing the fat – we didn’t really talk about anything important." },
+        { idiom: "can't complain", meaning: "To be happy with what you have; to not have any major problems.", usage: "by itself", example: "I can’t complain – I have a great job, a great family, and I’m healthy." },
+        { idiom: "curiosity killed the cat", meaning: "It’s not always a good idea to be curious and ask too many questions.", usage: "by itself", example: "I was just curious about what was in the box, but now I wish I hadn’t opened it – curiosity killed the cat!" },
+        { idiom: "clean slate", meaning: "To start over; to forget about the past.", usage: "as part of a sentence", example: "I’ve made some mistakes in the past, but I’m trying to start over with a clean slate." },
+        { idiom: "a clean slate", meaning: "To start over; to forget about the past.", usage: "as part of a sentence", example: "I’ve made some mistakes in the past, but I’m trying to start over with a clean slate." },
+        { idiom: "close call", meaning: "A situation where something bad almost happened but didn’t.", usage: "by itself", example: "That was a close call! I almost hit that pedestrian with my car." },
+        { idiom: "catch 22", meaning: "A situation where there is no good solution because of the conditions that are present.", usage: "as part of a sentence", example: "It’s a catch-22 – I can’t get a job without experience, but I can’t get experience without a job." },
+        { idiom: "cold feet", meaning: "To be too scared or nervous to do something.", usage: "as part of a sentence", example: "I was about to get married, but I got cold feet at the last minute and called it off." },
+        { idiom: "closed-minded", meaning: "To be unwilling to consider new ideas or opinions.", usage: "as part of a sentence", example: "I don’t want to date her because she seems closed-minded – she’s never willing to try new things." },
+        { idiom: "copycat", meaning: "Someone who imitates someone else.", usage: "as part of a sentence", example: "I don’t like her because she’s a copycat – she always does what I do." },
+        { idiom: "common sense", meaning: "Good judgment; the ability to think about and understand things in a reasonable way.", usage: "as part of a sentence", example: "It’s common sense – you shouldn’t jump out of a moving car!" },
+        { idiom: "crybaby", meaning: "A person who cries or complains a lot.", usage: "as part of a sentence", example: "Stop being such a crybaby – there’s nothing to be upset about." },
+        { idiom: "chicken out", meaning: "To be too scared to do something.", usage: "as part of a sentence", example: "I was about to jump out of the airplane, but I chickened out at the last minute." },
+        { idiom: "come hell or high water", meaning: "No matter what happens; no matter how difficult it is.", usage: "by itself", example: "I promised him that I would come to his game, and I will – come hell or high water." },
+        { idiom: "catching a falling knife", meaning: "To try to catch something that is falling, usually without success.", usage: "as part of a sentence", example: "He’s trying to catch a falling knife – he’s going to lose a lot of money if he invests in that company." },
+        { idiom: "dark horse", meaning: "A person who is not well-known but who has the potential to be successful.", usage: "as part of a sentence", example: "She was a dark horse in the election – no one thought she had a chance of winning, but she did." },
+        { idiom: "devil's advocate", meaning: "Someone who takes the opposite side of an argument just for the sake of an argument.", usage: "as part of a sentence", example: "I’m just playing devil’s advocate – I don’t really believe that, I’m just saying it for the sake of argument." },
+        { idiom: "dozed off", meaning: "Fell asleep, usually unintentionally.", usage: "as part of a sentence", example: "I was watching TV and I dozed off – I didn’t mean to, but I was really tired." },
+        { idiom: "drag your feet", meaning: "To delay or to take a long time to do something.", usage: "as part of a sentence", example: "I’ve been asking her to marry me for months, but she’s been dragging her feet." },
+        { idiom: "down in the dumps", meaning: "Sad or depressed.", usage: "as part of a sentence", example: "I’ve been feeling down in the dumps lately – I need to find something to make me happy." },
+        { idiom: "don't count your chickens before they hatch", meaning: "Don’t make plans for something that may not happen.", usage: "by itself", example: "I’ve been offered the job, but I’m not going to count my chickens before they hatch – I’ll believe it when I have the contract in my hand." },
+        { idiom: "don't put all your eggs in one basket", meaning: "Don’t put all your resources into one thing.", usage: "by itself", example: "I’m diversifying my investments – I don’t want to put all my eggs in one basket." },
+        { idiom: "down the drain", meaning: "Wasted or lost.", usage: "as part of a sentence", example: "All my hard work is down the drain – I didn’t get the job." },
+        { idiom: "drink like a fish", meaning: "To drink a lot of alcohol.", usage: "as part of a sentence", example: "He drinks like a fish – he’s always drunk." },
+        { idiom: "downer", meaning: "A depressing event or experience.", usage: "as part of a sentence", example: "That news was such a downer – I was really looking forward to the party." },
+        { idiom: "downplay", meaning: "To make something seem less important than it is.", usage: "as part of a sentence", example: "The company is downplaying the layoffs – they’re saying it’s just a “restructuring” of the workforce." },
+        { idiom: "down to earth", meaning: "Common sense, practical, or simple.", usage: "as part of a sentence", example: "I like her because she’s down to earth – she’s not interested in material things." },
+        { idiom: "duck out", meaning: "To leave quickly or to avoid something.", usage: "as part of a sentence", example: "I’m going to duck out early – I have an early meeting tomorrow." },
+        { idiom: "dumb down", meaning: "To make something simpler or easier to understand.", usage: "as part of a sentence", example: "They’re dumbing down the curriculum – they’re making it easier so that more students will pass." },
+        { idiom: "drama queen", meaning: "A person who is always seeking attention by creating drama.", usage: "as part of a sentence", example: "She’s such a drama queen – she’s always making a big deal out of nothing." },
+        { idiom: "drop a hat", meaning: "To be available or to do something on short notice.", usage: "as part of a sentence", example: "I’m dropping my hat – I can do it tomorrow." },
+        { idiom: "do something on a whim", meaning: "To do something without planning it.", usage: "as part of a sentence", example: "I bought the ticket on a whim – I didn’t even know where I was going." },
+        { idiom: "early bird", meaning: "A person who wakes up early or does something early.", usage: "as part of a sentence", example: "I’m not an early bird – I don’t like getting up early in the morning." },
+        { idiom: "egging on", meaning: "To encourage someone to do something, usually something bad.", usage: "as part of a sentence", example: "He was egging me on to drink more, but I wasn’t going to fall for it." },
+        { idiom: "eager beaver", meaning: "Someone who is eager to work or to do something.", usage: "as part of a sentence", example: "He’s an eager beaver – he’s always the first one to volunteer for something." },
+        { idiom: "ease up", meaning: "To relax or to take it easy.", usage: "as part of a sentence", example: "I need to ease up – I’ve been working too hard lately." },
+        { idiom: "end of the road", meaning: "The end or the final result.", usage: "as part of a sentence", example: "This is the end of the road – I’m not going to continue this relationship." },
+        { idiom: "eat crow", meaning: "To admit that you were wrong about something.", usage: "as part of a sentence", example: "I was sure that she was cheating on me, but I was wrong – I had to eat crow." },
+        { idiom: "easy as pie", meaning: "Something that is very easy to do.", usage: "by itself", example: "It’s easy as pie – all you have to do is add the ingredients and bake it." },
+        { idiom: "eat like a bird", meaning: "To eat very little.", usage: "as part of a sentence", example: "She eats like a bird – she’s so skinny." },
+        { idiom: "early bird gets the worm", meaning: "The early person has the advantage.", usage: "by itself", example: "I’m going to try to get there early – the early bird gets the worm." },
+        { idiom: "fat chance", meaning: "When you have no hope of something happening.", usage: "by itself", example: "I asked her out and she said fat chance." },
+        { idiom: "slim chance", meaning: "When you have no hope of something happening.", usage: "as part of a sentence", example: "There is a slim chance we will finish on time." },
+        { idiom: "for the birds", meaning: "When something is not worth your time or attention.", usage: "as part of a sentence", example: "This party is for the birds – let’s go somewhere else." },
+        { idiom: "flesh and blood", meaning: "Family or kinship.", usage: "as part of a sentence", example: "He’s my flesh and blood – I can’t just turn my back on him." },
+        { idiom: "fly by the seat of your pants", meaning: "To do something without planning or preparation.", usage: "as part of a sentence", example: "I didn’t have time to plan my presentation, so I just flew by the seat of my pants." },
+        { idiom: "fools rush in", meaning: "People who act without thinking first are more likely to make mistakes.", usage: "by itself", example: "I was going to ask her out, but I realized that fools rush in, so I changed my mind." },
+        { idiom: "freeze the moment", meaning: "To take a picture to capture a moment.", usage: "as part of a sentence", example: "I wanted to freeze the moment, so I took a picture." },
+        { idiom: "for pete's sake", meaning: "An exclamation is used to express frustration, anger, or surprise.", usage: "by itself", example: "For Pete’s sake, will you turn off the TV?" },
+        { idiom: "frankly speaking", meaning: "To be honest.", usage: "by itself", example: "Frankly speaking, I don’t think you’re qualified for the job." },
+        { idiom: "flop", meaning: "To fail or to be a failure.", usage: "as part of a sentence", example: "His new business venture was a flop – he lost all his money." },
+        { idiom: "from head to toe", meaning: "From the top of your head to the bottom of your feet.", usage: "as part of a sentence", example: "I was so dirty, I needed a shower from head to toe." },
+        { idiom: "full steam ahead", meaning: "To go quickly or to do something with a lot of energy.", usage: "by itself", example: "I’m going full steam ahead with my new project – I’m going to work on it day and night." },
+        { idiom: "funnybone", meaning: "The spot on your elbow where you can feel funny when you hit it.", usage: "as part of a sentence", example: "I hit my funny bone and it was so painful, I couldn’t stop laughing." },
+        { idiom: "f.y.i.", meaning: "For your information.", usage: "by itself", example: "I saw your ex-boyfriend with another girl – FYI." },
+        { idiom: "give and take", meaning: "To be willing to compromise.", usage: "as part of a sentence", example: "There needs to be some give and take in this relationship – I’m not going to always do what you want." },
+        { idiom: "get a kick out of", meaning: "To enjoy doing something.", usage: "as part of a sentence", example: "I get a kick out of watching people fall – it’s so funny." },
+        { idiom: "get in touch with", meaning: "To contact someone.", usage: "as part of a sentence", example: "I need to get in touch with her – I don’t have her phone number." },
+        { idiom: "get the ball rolling", meaning: "To start something.", usage: "as part of a sentence", example: "We need to get the ball rolling – we’ve been working on this project for too long." },
+        { idiom: "get the picture", meaning: "To understand what is happening or what someone is saying.", usage: "as part of a sentence", example: "I don’t think you get the picture – I’m not interested in dating you." },
+        { idiom: "get your act together", meaning: "To get organized or to get your life in order.", usage: "by itself", example: "He needs to get his act together – he’s a total mess." },
+        { idiom: "get on that", meaning: "To do something immediately.", usage: "as part of a sentence", example: "I need you to get on that – we don’t have much time." },
+        { idiom: "get right on that", meaning: "To do something immediately.", usage: "as part of a sentence", example: "I need you to get right on that – we don’t have much time." },
+        { idiom: "get your hands dirty", meaning: "To do something that is difficult or unpleasant.", usage: "as part of a sentence", example: "I don’t mind getting my hands dirty – I’ll do whatever it takes to get the job done." },
+        { idiom: "get the hang of it", meaning: "To learn how to do something.", usage: "as part of a sentence", example: "It takes time to get the hang of it – just keep practicing and you’ll get it." },
+        { idiom: "get lost", meaning: "To go away or to leave.", usage: "by itself", example: "I told him to get lost – I didn’t want to see him again." },
+        { idiom: "got dumped", meaning: "To be rejected by someone you are dating.", usage: "as part of a sentence", example: "He got dumped by his girlfriend – he was so upset." },
+        { idiom: "get with the program", meaning: "To do what is necessary or to follow the rules.", usage: "by itself", example: "You need to get with the program – you can’t just do whatever you want." },
+        { idiom: "go all out", meaning: "To do something with a lot of energy or to give it your all.", usage: "as part of a sentence", example: "I’m going to go all out on this project – I’m going to give it my all." },
+        { idiom: "go back to the drawing board", meaning: "To start over.", usage: "as part of a sentence", example: "We need to go back to the drawing board – this project is a total disaster." },
+        { idiom: "go the extra mile", meaning: "To do more than what is required.", usage: "as part of a sentence", example: "I always try to go the extra mile – I want to make sure that my boss is happy with my work." },
+        { idiom: "go with it", meaning: "To do what someone else wants or to follow their lead.", usage: "as part of a sentence", example: "I’m just going to go with it – I don’t really have a choice." },
+        { idiom: "give me a break", meaning: "An exclamation is used to express frustration or disbelief.", usage: "by itself", example: "Give me a break – I’ve been working all day!" },
+        { idiom: "giving someone the cold shoulder", meaning: "To ignore someone.", usage: "as part of a sentence", example: "She’s been giving me the cold shoulder ever since I told her that I didn’t like her new haircut." },
+        { idiom: "give me a hand", meaning: "To help me.", usage: "by itself", example: "Can you give me a hand with this? I can’t do it by myself." },
+        { idiom: "good to go", meaning: "To be ready.", usage: "by itself", example: "I’m all packed and I have my ticket – I’m good to go." },
+        { idiom: "google it", meaning: "To use the search engine Google to find information about something.", usage: "as part of a sentence", example: "I don’t know how to do it – just Google it." },
+        { idiom: "hang in there", meaning: "To keep trying or to persevere.", usage: "by itself", example: "Hang in there – you can do it!" },
+        { idiom: "hang on", meaning: "To wait or to hold on.", usage: "by itself", example: "Hang on – I’ll be right there." },
+        { idiom: "hang out", meaning: "To relax or to spend time with friends.", usage: "as part of a sentence", example: "Do you want to hang out tonight? I’m free." },
+        { idiom: "have a blast", meaning: "To have a lot of fun.", usage: "as part of a sentence", example: "We had a blast at the party – it was so much fun." },
+        { idiom: "have your cake and eat it too", meaning: "Being fortunate enough to have two positive things that would most likely never happen together.", usage: "by itself", example: "I can’t believe I got the job AND the raise – I feel like I’m having my cake and eating it too!" },
+        { idiom: "hit the sack", meaning: "To go to bed.", usage: "as part of a sentence", example: "It’s late – I’m going to hit the sack." },
+        { idiom: "hit the hay", meaning: "To go to bed.", usage: "as part of a sentence", example: "It’s late – I’m going to hit the hay." },
+        { idiom: "hit the ceiling", meaning: "To become angry or lose control.", usage: "as part of a sentence", example: "He hit the ceiling when he saw the mess that I made." },
+        { idiom: "high and mighty", meaning: "To act better or more important than others.", usage: "as part of a sentence", example: "He’s so high and mighty – he thinks he’s better than everyone else." },
+        { idiom: "hit the nail on the head", meaning: "To do or say something exactly right.", usage: "by itself", example: "You hit the nail on the head – that’s exactly what I was thinking." },
+        { idiom: "hit the road", meaning: "To leave or to go.", usage: "as part of a sentence", example: "I’m going to hit the road – I have a long drive ahead of me." },
+        { idiom: "hold your horses", meaning: "To wait or to stop.", usage: "by itself", example: "Hold your horses – I’m coming." },
+        { idiom: "hound someone", meaning: "To follow someone or to bother them.", usage: "as part of a sentence", example: "The reporters are hounding him – they won’t leave him alone." },
+        { idiom: "have a heart", meaning: "To be kind or to show mercy.", usage: "by itself", example: "Have a heart – don’t be so mean to her." },
+        { idiom: "heads up", meaning: "To be alert or to pay attention.", usage: "by itself", example: "Heads up – there’s a car coming." },
+        { idiom: "hang on tight", meaning: "To hold on tightly.", usage: "by itself", example: "Hang on tight – we’re going to go for a ride." },
+        { idiom: "in a nutshell", meaning: "To explain something briefly.", usage: "as part of a sentence", example: "In a nutshell, the project is behind schedule and over budget." },
+        { idiom: "in black and white", meaning: "In a clear and definite way.", usage: "as part of a sentence", example: "I need it in black and white – I don’t want any ambiguity." },
+        { idiom: "in the dark", meaning: "In secrecy or without knowing the details.", usage: "as part of a sentence", example: "I’m in the dark – I don’t know what’s going on." },
+        { idiom: "in a tight spot", meaning: "In a difficult situation.", usage: "as part of a sentence", example: "I’m in a tight spot – I need your help." },
+        { idiom: "in the clear", meaning: "No longer in trouble.", usage: "as part of a sentence", example: "I’m in the clear – I don’t have to worry about it anymore." },
+        { idiom: "in no time", meaning: "Immediately or very quickly.", usage: "as part of a sentence", example: "I’ll be there in no time – just wait for me." },
+        { idiom: "in the same boat", meaning: "To be in a similar situation.", usage: "as part of a sentence", example: "We’re both unemployed – we’re in the same boat." },
+        { idiom: "in the heat of the moment", meaning: "When you’re angry or emotional and you do or say something without thinking.", usage: "as part of a sentence", example: "I didn’t mean it – I said it in the heat of the moment." },
+        { idiom: "in a pickle", meaning: "To be in a difficult situation.", usage: "as part of a sentence", example: "I’m in a pickle – I don’t know what to do." },
+        { idiom: "in your face", meaning: "Direct or in a way that is difficult to ignore.", usage: "as part of a sentence", example: "It’s in your face – you can’t miss it." },
+        { idiom: "in a fog", meaning: "In a state of confusion.", usage: "as part of a sentence", example: "I’m in a fog – I don’t know what’s going on." },
+        { idiom: "it's on me", meaning: "I’ll pay for it.", usage: "by itself", example: "Dinner is on me – I’ll treat you." },
+        { idiom: "it's not rocket science", meaning: "It's not difficult to understand.", usage: "by itself", example: "It’s not rocket science – anyone can understand it." },
+        { idiom: "it goes without saying", meaning: "It is so obvious that it doesn’t need to be said.", usage: "as part of a sentence", example: "It goes without saying that you should be on time for your interview." },
+        { idiom: "judge a book by its cover", meaning: "To judge something by its appearance.", usage: "by itself", example: "Don’t judge a book by its cover – you might be surprised." },
+        { idiom: "jump ship", meaning: "To leave a project or a situation.", usage: "as part of a sentence", example: "I’m thinking of jumping ship – I’m not happy with my current job." },
+        { idiom: "jack of all trades", meaning: "A person who is good at many things but not an expert at any one.", usage: "as part of a sentence", example: "He can fix cars, paint, and code; he's a real jack of all trades." },
+        { idiom: "the jury is still out", meaning: "It hasn’t been decided yet.", usage: "by itself", example: "The jury is still out on the new boss – we’ll see how he does." },
+        { idiom: "jump the gun", meaning: "To do something too soon.", usage: "as part of a sentence", example: "I jumped the gun – I shouldn’t have said anything." },
+        { idiom: "jury rig", meaning: "To make a temporary fix.", usage: "as part of a sentence", example: "We jury-rigged it – it’s not perfect but it will do for now." },
+
+        // --- BACKGROUND COMPREHENSIVE PDF LIST DIRECT RE-SCAFFOLD ---
+        { idiom: "after the watershed", meaning: "A time when after which programmes for older audiences may be aired on TV.", usage: "as part of a sentence" },
+        { idiom: "against the clock", meaning: "Being rushed and having little time to complete something.", usage: "as part of a sentence" },
+        { idiom: "ahead of time", meaning: "Something that happens early or before it is supposed to.", usage: "as part of a sentence" },
+        { idiom: "around the clock", meaning: "At any time of the day or night", usage: "as part of a sentence" },
+        { idiom: "around the corner", meaning: "Will happen soon.", usage: "as part of a sentence" },
+        { idiom: "as time goes by", meaning: "The passing of one moment to the next.", usage: "as part of a sentence" },
+        { idiom: "back to basics", meaning: "An approach that uses traditional ideas that have previously worked.", usage: "as part of a sentence" },
+        { idiom: "bad apple", meaning: "Trouble maker or undesirable person in a group.", usage: "as part of a sentence" },
+        { idiom: "be glad to see the back of", meaning: "Be happy when a person leaves.", usage: "as part of a sentence" },
+        { idiom: "beat the clock", meaning: "Do something quickly before it's too late.", usage: "as part of a sentence" },
+        { idiom: "bee in one's bonnet", meaning: "Carrying an idea that's constantly in your thoughts.", usage: "as part of a sentence" },
+        { idiom: "behind the times", meaning: "Being old-fashioned.", usage: "as part of a sentence" },
+        { idiom: "bells and whistles", meaning: "Lots of desirable features.", usage: "as part of a sentence" },
+        { idiom: "bide one's time", meaning: "Waiting for further developments before taking action or making decisions.", usage: "as part of a sentence" },
+        { idiom: "big cheese", meaning: "Influential person", usage: "as part of a sentence" },
+        { idiom: "black and blue", meaning: "Badly bruised.", usage: "as part of a sentence" },
+        { idiom: "black and white", meaning: "Take everything into consideration and over simplify. Judge everything good or bad.", usage: "as part of a sentence" },
+        { idiom: "black as night", meaning: "Very dark and hard to see.", usage: "as part of a sentence" },
+        { idiom: "black eye", meaning: "Bruise around the eye.", usage: "as part of a sentence" },
+        { idiom: "black market", meaning: "Where goods are illegally bought and sold for profit.", usage: "as part of a sentence" },
+        { idiom: "black out", meaning: "Darken by turning off or dimming the lights. Lose consciousness.", usage: "as part of a sentence" },
+        { idiom: "black sheep", meaning: "Undesirable member of a group.", usage: "as part of a sentence" },
+        { idiom: "blackball", meaning: "Exclude or ostracise someone socially. Reject someone.", usage: "as part of a sentence" },
+        { idiom: "blacklist", meaning: "Exclude someone.", usage: "as part of a sentence" },
+        { idiom: "blackmail", meaning: "Extort or take money from someone by threatening to use their secrets against them.", usage: "as part of a sentence" },
+        { idiom: "blind date", meaning: "Pre-arranged social interaction between people who have never met.", usage: "as part of a sentence" },
+        { idiom: "blood red", meaning: "Description of something with a deep red colour.", usage: "as part of a sentence" },
+        { idiom: "blood sweat & tears", meaning: "Something that requires a lot of effort and hard work.", usage: "as part of a sentence" },
+        { idiom: "blow a fuse", meaning: "Suddenly get very angry, perhaps over something unexpected.", usage: "as part of a sentence" },
+        { idiom: "blow up in the face", meaning: "A plan or project that suddenly fails.", usage: "as part of a sentence" },
+        { idiom: "blue blood", meaning: "From noble, aristocratic or wealthy family.", usage: "as part of a sentence" },
+        { idiom: "blue collar", meaning: "Working in a manual labour job.", usage: "as part of a sentence" },
+        { idiom: "blue in the face", meaning: "Try hard to win an agreement but usually unsuccessful.", usage: "as part of a sentence" },
+        { idiom: "blue ribbon", meaning: "Superior quality or distinction. The best of a group.", usage: "as part of a sentence" },
+        { idiom: "bookworm", meaning: "Someone who reads a lot.", usage: "as part of a sentence" },
+        { idiom: "born with a silver spoon in one's mouth", meaning: "Born into a rich and affluent family.", usage: "as part of a sentence" },
+        { idiom: "bottom falls out", meaning: "A plan or project that fails.", usage: "as part of a sentence" },
+        { idiom: "brainstorm", meaning: "Develop or think of new ideas.", usage: "as part of a sentence" },
+        { idiom: "bread-winner", meaning: "Person that is the primary source of income for a family.", usage: "as part of a sentence" },
+        { idiom: "broken watch is right twice a day", meaning: "When something is lucky or successful but undeserving.", usage: "as part of a sentence" },
+        { idiom: "bun in the oven", meaning: "Pregnant.", usage: "as part of a sentence" },
+        { idiom: "by degrees", meaning: "Something happens or develops gradually or little by little.", usage: "as part of a sentence" },
+        { idiom: "carry the torch for", meaning: "Having strong feelings for someone who cannot be yours.", usage: "as part of a sentence" },
+        { idiom: "cash cow", meaning: "Dependable source of income.", usage: "as part of a sentence" },
+        { idiom: "cat burglar", meaning: "Thief who climbs into buildings.", usage: "as part of a sentence" },
+        { idiom: "catch someone at a bad time", meaning: "When it is inconvenient.", usage: "as part of a sentence" },
+        { idiom: "chance one's arm", meaning: "Deciding to do something even though the chances of success are slim or unknown.", usage: "as part of a sentence" },
+        { idiom: "chase rainbows", meaning: "Try to achieve something that is very difficult, impossible or very desirable.", usage: "as part of a sentence" },
+        { idiom: "chase your tail", meaning: "Spend a lot of time and energy but achieve nothing.", usage: "as part of a sentence" },
+        { idiom: "cheesy", meaning: "Tacky, silly, inauthentic or cheap.", usage: "as part of a sentence" },
+        { idiom: "clock-in/clock-out", meaning: "Record the time of arrival and the time of departure.", usage: "as part of a sentence" },
+        { idiom: "close to home", meaning: "A comment that is true and makes you uncomfortable.", usage: "as part of a sentence" },
+        { idiom: "coming of age", meaning: "When something develops completely and reached maturity. When a child becomes an adult.", usage: "as part of a sentence" },
+        { idiom: "cook someone's goose", meaning: "Spoil the person's chance of success.", usage: "as part of a sentence" },
+        { idiom: "cover a lot of ground", meaning: "Complete a lot of work or a wide range of things.", usage: "as part of a sentence" },
+        { idiom: "crack of dawn", meaning: "Very early in the morning. The first moments of sunrise.", usage: "as part of a sentence" },
+        { idiom: "crunch time", meaning: "When an important decision needs to be made by.", usage: "as part of a sentence" },
+        { idiom: "cut one's own throat", meaning: "Doing something that will cause your own failure or downfall.", usage: "as part of a sentence" },
+        { idiom: "day to day", meaning: "Part of a usual routine.", usage: "as part of a sentence" },
+        { idiom: "days are numbered", meaning: "Expected to be in a role or to die soon.", usage: "as part of a sentence" },
+        { idiom: "dead duck", meaning: "Plan or event that has failed or is certain to fail and therefore not worth discussing.", usage: "as part of a sentence" },
+        { idiom: "dead in the water", meaning: "Plan or project that has ceased to function and is not expected to re-activate.", usage: "as part of a sentence" },
+        { idiom: "dead wood", meaning: "People or things that are no longer useful or necessary.", usage: "as part of a sentence" },
+        { idiom: "deep down", meaning: "Describing what a person really feels deep inside them", usage: "as part of a sentence" },
+        { idiom: "deliver the goods", meaning: "Do what is expected or required.", usage: "as part of a sentence" },
+        { idiom: "do time", meaning: "Spend time in prison.", usage: "as part of a sentence" },
+        { idiom: "donkey's years", meaning: "A very long period of time.", usage: "as part of a sentence" },
+        { idiom: "double date", meaning: "Social interaction that involves two couples.", usage: "as part of a sentence" },
+        { idiom: "drastic times call for drastic measures", meaning: "When you are extremely desperate you need to take drastic actions.", usage: "as part of a sentence" },
+        { idiom: "drawing a blank", meaning: "Get no response from someone when you ask them a question or to have no answer yourself.", usage: "as part of a sentence" },
+        { idiom: "dropout", meaning: "Stop attending school before it is time.", usage: "as part of a sentence" },
+        { idiom: "dwell on the past", meaning: "Thinking too much about something that happened in the past.", usage: "as part of a sentence" },
+        { idiom: "eat sleep & breathe something", meaning: "Being so enthusiastic and passionate about something that you think about it all the time.", usage: "as part of a sentence" },
+        { idiom: "egg head", meaning: "Studious and academic person.", usage: "as part of a sentence" },
+        { idiom: "elbow room", meaning: "Enough space to move or work in.", usage: "as part of a sentence" },
+        { idiom: "eleventh hour", meaning: "At the very last minute or just in time.", usage: "as part of a sentence" },
+        { idiom: "elvis has left the building", meaning: "The show has come to an end. It's over.", usage: "as part of a sentence" },
+        { idiom: "explore all avenues", meaning: "Investigating or examining every option.", usage: "as part of a sentence" },
+        { idiom: "eye-catching", meaning: "Tending to attract attention.", usage: "as part of a sentence" },
+        { idiom: "fallen in love", meaning: "Start feeling love towards someone.", usage: "as part of a sentence" },
+        { idiom: "far cry from", meaning: "Very different from.", usage: "as part of a sentence" },
+        { idiom: "feeling blue", meaning: "Feeling depressed or disconnected.", usage: "as part of a sentence" },
+        { idiom: "fever pitch", meaning: "When a feeling is very intense and exciting.", usage: "as part of a sentence" },
+        { idiom: "fill in the blanks", meaning: "Supply missing words or information.", usage: "as part of a sentence" },
+        { idiom: "first in best dressed", meaning: "The opportunity is afforded to the first to arrive or present themselves.", usage: "as part of a sentence" },
+        { idiom: "first out of the gate", meaning: "Being the first one to make a start at something", usage: "as part of a sentence" },
+        { idiom: "fish out of water", meaning: "Feeling uncomfortable in unfamiliar surroundings", usage: "as part of a sentence" },
+        { idiom: "foot in the door", meaning: "Small but good start with the possibility of a bright future.", usage: "as part of a sentence" },
+        { idiom: "for the time being", meaning: "An action or state will continue into the future but is temporary.", usage: "as part of a sentence" },
+        { idiom: "from now on", meaning: "From this time forward.", usage: "as part of a sentence" },
+        { idiom: "from time to time", meaning: "Occasionally or not very often.", usage: "as part of a sentence" },
+        { idiom: "full of beans", meaning: "Excited or very energetic and lively.", usage: "as part of a sentence" },
+        { idiom: "full of the joys of spring", meaning: "Very happy and full of energy.", usage: "as part of a sentence" },
+        { idiom: "getting sacked", meaning: "To lose your job.", usage: "as part of a sentence" },
+        { idiom: "getting the show on the road", meaning: "Putting a plan or idea into action.", usage: "as part of a sentence" },
+        { idiom: "give the green light", meaning: "Provide permission to proceed.", usage: "as part of a sentence" },
+        { idiom: "go belly up", meaning: "Fail completely.", usage: "as part of a sentence" },
+        { idiom: "going places", meaning: "Demonstrating talent and ability that will lead to success.", usage: "as part of a sentence" },
+        { idiom: "golden boy", meaning: "Young man idolised for a great skill, typically in sport.", usage: "as part of a sentence" },
+        { idiom: "golden handshake", meaning: "Large sum of money given to someone when they retire from a company.", usage: "as part of a sentence" },
+        { idiom: "golden opportunity", meaning: "A very good opportunity that may never present itself again.", usage: "as part of a sentence" },
+        { idiom: "grass is always greener on the other side", meaning: "The alternative solution may seem better even if that isn't always the case.", usage: "as part of a sentence" },
+        { idiom: "grease someone's palm", meaning: "Give someone money in order to persuade them to do something dishonest.", usage: "as part of a sentence" },
+        { idiom: "green thumb", meaning: "Ability to make plants grow or be good at gardening.", usage: "as part of a sentence" },
+        { idiom: "green with envy", meaning: "Extremely jealous or full of envy.", usage: "as part of a sentence" },
+        { idiom: "grey area", meaning: "Unclear or undefined.", usage: "as part of a sentence" },
+        { idiom: "hanging on by fingernails", meaning: "Continuing to do something in a very difficult situation.", usage: "as part of a sentence" },
+        { idiom: "hard as nails", meaning: "Without sentiment or sympathy for anyone.", usage: "as part of a sentence" },
+        { idiom: "having one's heart set on something", meaning: "Possessing a determination to achieve something.", usage: "as part of a sentence" },
+        { idiom: "head in the clouds", meaning: "Having unrealistic or impractical ideas.", usage: "as part of a sentence" },
+        { idiom: "head over heels in love", meaning: "Very much in love with someone.", usage: "as part of a sentence" },
+        { idiom: "hear it on the grapevine", meaning: "Hear something through informal or unofficial means, like gossip.", usage: "as part of a sentence" },
+        { idiom: "heart is in the right place", meaning: "Having good intentions, even if the results may not be impressive.", usage: "as part of a sentence" },
+        { idiom: "here today gone tomorrow", meaning: "When desirable things, such as money or happiness, are temporary.", usage: "as part of a sentence" },
+        { idiom: "high time", meaning: "When something should have been done already and is overdue.", usage: "as part of a sentence" },
+        { idiom: "hit the big time", meaning: "To become successful.", usage: "as part of a sentence" },
+        { idiom: "hit the books", meaning: "Begin studying hard.", usage: "as part of a sentence" },
+        { idiom: "hit the panic button", meaning: "Act quickly and without thinking in reaction to an unexpected event.", usage: "as part of a sentence" },
+        { idiom: "hold the fort", meaning: "Have responsibility for something or care about someone while others are away or out.", usage: "as part of a sentence" },
+        { idiom: "honest as the day is long", meaning: "Someone that is trustworthy and honest.", usage: "as part of a sentence" },
+        { idiom: "hot potato", meaning: "Speak of a current issue which many people are talking about and which is usually disputed.", usage: "as part of a sentence" },
+        { idiom: "hour of need", meaning: "When someone really needs something - their last chance.", usage: "as part of a sentence" },
+        { idiom: "in due course", meaning: "Everything will happen when it is supposed to or at the appropriate time.", usage: "as part of a sentence" },
+        { idiom: "in one's own time", meaning: "Taking as long as you want to complete something or completing something at your own pace.", usage: "as part of a sentence" },
+        { idiom: "in someone's black book", meaning: "Be in disgrace or disfavour with someone.", usage: "as part of a sentence" },
+        { idiom: "in the bag", meaning: "Something that is assured or a guaranteed success.", usage: "as part of a sentence" },
+        { idiom: "in the black", meaning: "In profit.", usage: "as part of a sentence" },
+        { idiom: "in the blink of an eye", meaning: "Something that happens very quickly.", usage: "as part of a sentence" },
+        { idiom: "in the interim", meaning: "Between two events or something that is temporary.", usage: "as part of a sentence" },
+        { idiom: "in the long run", meaning: "Over a period of time.", usage: "as part of a sentence" },
+        { idiom: "in the nick of time", meaning: "Just before it is too late.", usage: "as part of a sentence" },
+        { idiom: "in the red", meaning: "In debt with your bank. To have a negative bank balance or to owe money to the bank.", usage: "as part of a sentence" },
+        { idiom: "in the right place at the right time", meaning: "When something happens fortuitously or when given an unexpected opportunity.", usage: "as part of a sentence" },
+        { idiom: "in the wrong place at the wrong time", meaning: "When something unlucky happens that would not normally have happened.", usage: "as part of a sentence" },
+        { idiom: "in tune with someone", meaning: "Have the same ideas and be in agreement with someone else.", usage: "as part of a sentence" },
+        { idiom: "itchy feet", meaning: "Strong impulse to travel or go somewhere.", usage: "as part of a sentence" },
+        { idiom: "keep something at bay", meaning: "Keep something away or prevent something from happening.", usage: "as part of a sentence" },
+        { idiom: "keeping up appearances", meaning: "Maintaining an outward show of prosperity or well-being while hiding your difficulties.", usage: "as part of a sentence" },
+        { idiom: "keeping your finger on the pulse", meaning: "Being constantly aware of current developments.", usage: "as part of a sentence" },
+        { idiom: "kept in the dark", meaning: "Not knowing the secrets or truth.", usage: "as part of a sentence" },
+        { idiom: "kill time", meaning: "Do something whilst waiting.", usage: "as part of a sentence" },
+        { idiom: "landslide victory", meaning: "Overwhelming victory.", usage: "as part of a sentence" },
+        { idiom: "laugh a minute", meaning: "Someone or something that is very funny.", usage: "as part of a sentence" },
+        { idiom: "learn by rote", meaning: "Learn something by memorising it without thought to what is being learnt.", usage: "as part of a sentence" },
+        { idiom: "learn something off by heart", meaning: "Memorise so well, that it can be written or recited without thinking.", usage: "as part of a sentence" },
+        { idiom: "learn the ropes", meaning: "Learn how to do a job or task properly.", usage: "as part of a sentence" },
+        { idiom: "lemon", meaning: "New vehicle that has many faults.", usage: "as part of a sentence" },
+        { idiom: "let me see the colour of your money", meaning: "Prove that you can afford something.", usage: "as part of a sentence" },
+        { idiom: "let slip through fingers", meaning: "Failing to obtain or retain a good opportunity.", usage: "as part of a sentence" },
+        { idiom: "lick one's wounds", meaning: "Trying to regain confidence after a defeat.", usage: "as part of a sentence" },
+        { idiom: "lightning fast", meaning: "Very fast.", usage: "as part of a sentence" },
+        { idiom: "lights are on but nobody is home", meaning: "Someone is stupid or lacking intelligence.", usage: "as part of a sentence" },
+        { idiom: "like clockwork", meaning: "Happens at very regular times or intervals without fail.", usage: "as part of a sentence" },
+        { idiom: "like there's no tomorrow", meaning: "Do something fast or energetic, as if it were the last opportunity to do so.", usage: "as part of a sentence" },
+        { idiom: "lining up all the ducks in a row", meaning: "Being well organised in preparation for something.", usage: "as part of a sentence" },
+        { idiom: "living beyond your means", meaning: "Spending more than you can afford.", usage: "as part of a sentence" },
+        { idiom: "living in an ivory tower", meaning: "Living a lifestyle that saves or obscures you from real world issues.", usage: "as part of a sentence" },
+        { idiom: "living on the breadline", meaning: "Having very little income.", usage: "as part of a sentence" },
+        { idiom: "long arm of the law", meaning: "Far-reaching power of the authorities.", usage: "as part of a sentence" },
+        { idiom: "long time no see", meaning: "Not seen since long ago.", usage: "as part of a sentence" },
+        { idiom: "look on the bright side", meaning: "View an unpleasant situation in a positive light.", usage: "as part of a sentence" },
+        { idiom: "love at first sight", meaning: "Start feeling love towards someone the first time you see them.", usage: "as part of a sentence" },
+        { idiom: "lovey-dovey", meaning: "Making an excessive display of affection.", usage: "as part of a sentence" },
+        { idiom: "lump in your throat", meaning: "Tight feeling in the throat because of an emotion like sadness, pride or gratitude.", usage: "as part of a sentence" },
+        { idiom: "make my day", meaning: "Something that makes me very happy or satisfies me.", usage: "as part of a sentence" },
+        { idiom: "make or break", meaning: "Circumstances causing total success or total failure.", usage: "as part of a sentence" },
+        { idiom: "make the grade", meaning: "Be satisfactory or at an accepted level.", usage: "as part of a sentence" },
+        { idiom: "make time", meaning: "Find time to do something as a priority.", usage: "as part of a sentence" },
+        { idiom: "makes your flesh crawl", meaning: "Something that makes you feel disgusted or nervous.", usage: "as part of a sentence" },
+        { idiom: "making a go of it", meaning: "Attempting to succeed at something.", usage: "as part of a sentence" },
+        { idiom: "making good time", meaning: "Completing something faster than expected.", usage: "as part of a sentence" },
+        { idiom: "making headway", meaning: "Making progress in what you are trying to do.", usage: "as part of a sentence" },
+        { idiom: "match made in heaven", meaning: "Relationship that is likely to be happy and successful.", usage: "as part of a sentence" },
+        { idiom: "mile a minute", meaning: "Happens very quickly.", usage: "as part of a sentence" },
+        { idiom: "monkey business", meaning: "Mischievous or deceitful behaviour.", usage: "as part of a sentence" },
+        { idiom: "month of Sundays", meaning: "A very long period of time.", usage: "as part of a sentence" },
+        { idiom: "murphy's law", meaning: "Anything that can go wrong will go wrong.", usage: "as part of a sentence" },
+        { idiom: "never in a million years", meaning: "Will never happen.", usage: "as part of a sentence" },
+        { idiom: "no time like the present", meaning: "The belief it is better to do something right away instead of waiting.", usage: "as part of a sentence" },
+        { idiom: "no time to lose", meaning: "Start something right away, otherwise it won't be finished on time.", usage: "as part of a sentence" },
+        { idiom: "not letting grass grow under your feet", meaning: "Not delaying in getting something done.", usage: "as part of a sentence" },
+        { idiom: "not letting moss grow over", meaning: "Doing something now or without delay.", usage: "as part of a sentence" },
+        { idiom: "now and then", meaning: "Occasionally.", usage: "as part of a sentence" },
+        { idiom: "now or never", meaning: "Something that should be done now or it will never be done.", usage: "as part of a sentence" },
+        { idiom: "off colour", meaning: "Unwell.", usage: "as part of a sentence" },
+        { idiom: "off to a flying start", meaning: "Something that is immediately successful or has begun well.", usage: "as part of a sentence" },
+        { idiom: "old hand", meaning: "Person with a lot of experience in something.", usage: "as part of a sentence" },
+        { idiom: "old school", meaning: "Holding ideas that were popular and important in the past but which are no longer so.", usage: "as part of a sentence" },
+        { idiom: "on the brain", meaning: "Thinking or talking about something constantly.", usage: "as part of a sentence" },
+        { idiom: "on the rocks", meaning: "Relationship experiencing problems.", usage: "as part of a sentence" },
+        { idiom: "on time", meaning: "Not being late or something happening at the expected time.", usage: "as part of a sentence" },
+        { idiom: "once upon a time", meaning: "Something that happened a long time ago.", usage: "as part of a sentence" },
+        { idiom: "only time will tell", meaning: "The truth, answer or result, will be revealed at some future point.", usage: "as part of a sentence" },
+        { idiom: "out of the blue", meaning: "Suddenly from nowhere and without warning.", usage: "as part of a sentence" },
+        { idiom: "out of the red", meaning: "No longer in debt.", usage: "as part of a sentence" },
+        { idiom: "out of time", meaning: "No time left to do something or a set time has been reached.", usage: "as part of a sentence" },
+        { idiom: "paint the town red", meaning: "Go out and have a really good time at a party.", usage: "as part of a sentence" },
+        { idiom: "pass with flying colours", meaning: "Pass with a high score.", usage: "as part of a sentence" },
+        { idiom: "pitch black", meaning: "Very dark with zero or almost zero visibility.", usage: "as part of a sentence" },
+        { idiom: "place in the sun", meaning: "A position that provides you all the success and happiness you want.", usage: "as part of a sentence" },
+        { idiom: "pop the question", meaning: "Propose marriage to someone.", usage: "as part of a sentence" },
+        { idiom: "pressed for time", meaning: "Being rushed or not having enough time to complete something.", usage: "as part of a sentence" },
+        { idiom: "proud as a peacock", meaning: "Very proud", usage: "as part of a sentence" },
+        { idiom: "pull the plug", meaning: "Terminate or discontinue something.", usage: "as part of a sentence" },
+        { idiom: "pull wool over other people's eyes", meaning: "Deceive someone into thinking well of them.", usage: "as part of a sentence" },
+        { idiom: "pulling out all the stops", meaning: "Doing everything you can to make something happen.", usage: "as part of a sentence" },
+        { idiom: "punch above one's weight", meaning: "Performing beyond your ability.", usage: "as part of a sentence" },
+        { idiom: "puppy love", meaning: "Temporary infatuation between young people.", usage: "as part of a sentence" },
+        { idiom: "put it in black and white", meaning: "Write down for confirmation or evidence.", usage: "as part of a sentence" },
+        { idiom: "put your thinking cap on", meaning: "Engage your mind and think in a serious manner.", usage: "as part of a sentence" },
+        { idiom: "rags to riches", meaning: "Becoming very rich whilst starting very poor.", usage: "as part of a sentence" },
+        { idiom: "raise the white flag", meaning: "Accept defeat and surrender to the other party.", usage: "as part of a sentence" },
+        { idiom: "raring to go", meaning: "Being very eager or enthusiastic about the idea.", usage: "as part of a sentence" },
+        { idiom: "rat race", meaning: "Exhausting and repetitive routine.", usage: "as part of a sentence" },
+        { idiom: "red flag", meaning: "Signal or indication that something is not working properly or correctly.", usage: "as part of a sentence" },
+        { idiom: "red herring", meaning: "Unimportant matter that misleads and draws attention away.", usage: "as part of a sentence" },
+        { idiom: "red hot", meaning: "New and exciting, creating much demand.", usage: "as part of a sentence" },
+        { idiom: "red in the face", meaning: "Embarrassed.", usage: "as part of a sentence" },
+        { idiom: "red tape", meaning: "Set of rules and/or regulations that slow or stop progress.", usage: "as part of a sentence" },
+        { idiom: "red-eye", meaning: "Journey that leaves late in the night and arrives early in the morning.", usage: "as part of a sentence" },
+        { idiom: "road hog", meaning: "Dangerous driver.", usage: "as part of a sentence" },
+        { idiom: "roll out the red carpet", meaning: "Greet a person with great respect and give them a big, warm welcome.", usage: "as part of a sentence" },
+        { idiom: "sail through something", meaning: "Being successful at something without difficulty.", usage: "as part of a sentence" },
+        { idiom: "save time", meaning: "Do something quickly or in a way that allows time for other things.", usage: "as part of a sentence" },
+        { idiom: "school of hard knocks", meaning: "Learning through difficult experiences, as opposed to formal, classroom education.", usage: "as part of a sentence" },
+        { idiom: "school of thought", meaning: "Particular philosophy or way of thinking about something.", usage: "as part of a sentence" },
+        { idiom: "schoolboy error", meaning: "Very basic or foolish mistake.", usage: "as part of a sentence" },
+        { idiom: "seeing red", meaning: "React with uncontrollable rage.", usage: "as part of a sentence" },
+        { idiom: "sell ice to eskimos", meaning: "Persuade people to go against their best interests or to accept something unnecessary.", usage: "as part of a sentence" },
+        { idiom: "shelf life", meaning: "The expected duration of lifespan of something (typically food, drink or medicine).", usage: "as part of a sentence" },
+        { idiom: "show of hands", meaning: "Raising hands to vote about something.", usage: "as part of a sentence" },
+        { idiom: "shown the red card", meaning: "Dismissed or told to leave.", usage: "as part of a sentence" },
+        { idiom: "silver screen", meaning: "Film industry", usage: "as part of a sentence" },
+        { idiom: "single file", meaning: "Line of people with one person standing behind another.", usage: "as part of a sentence" },
+        { idiom: "sink or swim", meaning: "Fail or succeed.", usage: "as part of a sentence" },
+        { idiom: "sinking teeth into something", meaning: "Doing something with a lot of energy and enthusiasm.", usage: "as part of a sentence" },
+        { idiom: "skip class", meaning: "Not go to school when you should.", usage: "as part of a sentence" },
+        { idiom: "sleeping partner", meaning: "Person who has put money into a business or venture but who is not involved in running it.", usage: "as part of a sentence" },
+        { idiom: "slice of the pie", meaning: "Share of something, such as money, profits, etc.", usage: "as part of a sentence" },
+        { idiom: "smash hit", meaning: "A big success.", usage: "as part of a sentence" },
+        { idiom: "sooner or later", meaning: "Something is certain to happen but it isn't known when exactly.", usage: "as part of a sentence" },
+        { idiom: "sour grapes", meaning: "Pretending to dislike something you cannot have.", usage: "as part of a sentence" },
+        { idiom: "spanner in the works", meaning: "Suddenly disrupt something by introducing something unexpected or unwanted.", usage: "as part of a sentence" },
+        { idiom: "speaks volumes", meaning: "Express a reaction without words.", usage: "as part of a sentence" },
+        { idiom: "standing ground", meaning: "Maintaining your position", usage: "as part of a sentence" },
+        { idiom: "standing the test of time", meaning: "Something that lasts or continues to work well for a long time.", usage: "as part of a sentence" },
+        { idiom: "steal someone's thunder", meaning: "Take the credit for something someone else did.", usage: "as part of a sentence" },
+        { idiom: "stiff upper lip", meaning: "Not showing emotions.", usage: "as part of a sentence" },
+        { idiom: "stuck in a time warp", meaning: "Not changed for a very long time, when everything else around has.", usage: "as part of a sentence" },
+        { idiom: "swallow one's pride", meaning: "Accepting something humiliating or embarrassing.", usage: "as part of a sentence" },
+        { idiom: "sweet tooth", meaning: "Liking for sweet-tasting foods.", usage: "as part of a sentence" },
+        { idiom: "take each day as it comes", meaning: "Deal with things as and when they happen.", usage: "as part of a sentence" },
+        { idiom: "teacher's pet", meaning: "Teacher's favourite student.", usage: "as part of a sentence" },
+        { idiom: "the moment of truth", meaning: "When an important decision is made or the truth about something is revealed.", usage: "as part of a sentence" },
+        { idiom: "the time is ripe", meaning: "The right or most opportune moment to do something.", usage: "as part of a sentence" },
+        { idiom: "thinking on your feet", meaning: "Adjusting quickly to change and making fast decisions.", usage: "as part of a sentence" },
+        { idiom: "this day and age", meaning: "These or modern times.", usage: "as part of a sentence" },
+        { idiom: "tickled pink", meaning: "Very pleased, thrilled or delighted about something.", usage: "as part of a sentence" },
+        { idiom: "tie the knot", meaning: "Get married.", usage: "as part of a sentence" },
+        { idiom: "time after time", meaning: "Do something repeatedly", usage: "as part of a sentence" },
+        { idiom: "time flies", meaning: "When time passes quickly.", usage: "as part of a sentence" },
+        { idiom: "time for a change", meaning: "Stop what you are doing and start doing something else.", usage: "as part of a sentence" },
+        { idiom: "time heals all wounds", meaning: "Feelings of hurt (usually emotional) will go away after some time has passed.", usage: "as part of a sentence" },
+        { idiom: "time is of the essence", meaning: "When meeting a deadline is very important or critical.", usage: "as part of a sentence" },
+        { idiom: "time of one's life", meaning: "A time when someone is enjoying themselves.", usage: "as part of a sentence" },
+        { idiom: "time on one's hands", meaning: "When you can afford to wait before doing or achieving something.", usage: "as part of a sentence" },
+        { idiom: "tongue-tied", meaning: "Difficulty in expressing yourself because of nervousness or embarrassment.", usage: "as part of a sentence" },
+        { idiom: "too many chiefs and not enough indians", meaning: "Too many people telling others what to do.", usage: "as part of a sentence" },
+        { idiom: "too much free time on one's hand", meaning: "When someone doesn't have enough to do.", usage: "as part of a sentence" },
+        { idiom: "top banana", meaning: "Most important person in a group.", usage: "as part of a sentence" },
+        { idiom: "top dog", meaning: "Most important person.", usage: "as part of a sentence" },
+        { idiom: "tough cookie", meaning: "Very determined person.", usage: "as part of a sentence" },
+        { idiom: "tricks of the trade", meaning: "Clever or expert way of doing something.", usage: "as part of a sentence" },
+        { idiom: "true colours", meaning: "Someone's actual character.", usage: "as part of a sentence" },
+        { idiom: "turn back the hands of time", meaning: "Reverse something or go back to a time in the past.", usage: "as part of a sentence" },
+        { idiom: "university of life", meaning: "Daily life and work where you learn more than you would through formal education.", usage: "as part of a sentence" },
+        { idiom: "until hell freezes over", meaning: "Something will never happen, no matter how hard or long you try for it to.", usage: "as part of a sentence" },
+        { idiom: "up in smoke", meaning: "Something that ends before getting a result.", usage: "as part of a sentence" },
+        { idiom: "waiting in the wings", meaning: "Waiting for an opportunity to take action.", usage: "as part of a sentence" },
+        { idiom: "walk out on someone", meaning: "Leave a partner and end the relationship.", usage: "as part of a sentence" },
+        { idiom: "wasting time", meaning: "Doing something with no purpose.", usage: "as part of a sentence" },
+        { idiom: "well-oiled machine", meaning: "Unit of people or a group of things working well together.", usage: "as part of a sentence" },
+        { idiom: "whale of a time", meaning: "Enjoying something thoroughly.", usage: "as part of a sentence" },
+        { idiom: "white as a sheet", meaning: "In a state of great fear or anxiety.", usage: "as part of a sentence" },
+        { idiom: "white collar", meaning: "Office worker.", usage: "as part of a sentence" },
+        { idiom: "white elephant", meaning: "Expensive item that's costly to maintain and not particularly useful.", usage: "as part of a sentence" },
+        { idiom: "white lie", meaning: "Little or harmless lie told to be polite and avoid hurting someone's feelings.", usage: "as part of a sentence" },
+        { idiom: "whitewash", meaning: "Cover up or gloss over faults.", usage: "as part of a sentence" },
+        { idiom: "with bells on", meaning: "When you are delighted and eager to go somewhere.", usage: "as part of a sentence" },
+        { idiom: "wooden spoon", meaning: "Imaginary prize for the last person in a race.", usage: "as part of a sentence" },
+        { idiom: "works like a charm", meaning: "Works very well or as expected.", usage: "as part of a sentence" },
+        { idiom: "wouldn't be caught dead", meaning: "Would never like to do something.", usage: "as part of a sentence" },
+        { idiom: "year in year out", meaning: "Happens every year for many years in a row.", usage: "as part of a sentence" },
+        { idiom: "yellow-bellied", meaning: "Coward", usage: "as part of a sentence" },
+        { idiom: "you can't teach an old dog new tricks", meaning: "People used to doing things a certain way are often unable to change their ways.", usage: "by itself" }
+    ];
+
+    function decodePhrase() {
+        const input = document.getElementById('phraseInput').value.trim();
+        if (!input) return;
+
+        // Clean input punctuation and spacing for flexible matching
+        const lowerInput = input.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g,"").replace(/\s+/g, ' ');
+        let literalMeaning = `The phrase describes the physical items or literal words: "${input}".`;
+        let contextualMeaning = "No special idiom matched. This sentence likely means exactly what the literal words say, or it might require asking the speaker for clarification.";
+        let usageType = "Direct Context";
+        let exampleText = "";
+        let found = false;
+
+        // Scan database for a match
+        for (let entry of idiomDatabase) {
+            const cleanIdiom = entry.idiom.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g,"");
+            if (lowerInput.includes(cleanIdiom) || cleanIdiom.includes(lowerInput)) {
+                contextualMeaning = entry.meaning;
+                usageType = entry.usage;
+                literalMeaning = `The sentence incorporates the expression construct: "${entry.idiom}".`;
+                if (entry.example) {
+                    exampleText = `<strong>Example:</strong> ${entry.example}`;
+                }
+                found = true;
+                break;
+            }
+        }
+
+        // Output results to screen instantly
+        document.getElementById('resPhrase').innerText = `"${input}"`;
+        document.getElementById('resUsage').innerText = usageType;
+        document.getElementById('resLiteral').innerText = literalMeaning;
+        document.getElementById('resContextual').innerText = contextualMeaning;
+        
+        const exBox = document.getElementById('resExample');
+        if (exampleText) {
+            exBox.innerHTML = exampleText;
+            exBox.style.display = "block";
+        } else {
+            exBox.style.display = "none";
+        }
+
+        document.getElementById('resultCard').style.display = "block";
+    }
+
+    // Bind Enter key trigger
+    document.getElementById('phraseInput').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') decodePhrase();
+    });
+</script>
+</body>
+</html>
